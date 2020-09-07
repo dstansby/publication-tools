@@ -1,6 +1,7 @@
 import astropy.constants as const
 import astropy.units as u
 import numpy as np
+import sunpy.coordinates
 import sunpy.map
 
 
@@ -109,7 +110,7 @@ def contour(m, level):
 
     Parameters
     ----------
-    smap : `~sunpy.map.GenericMap`
+    m : `~sunpy.map.GenericMap`
         Input map.
     level : float
         Value along which to find contours in the array.
@@ -125,3 +126,49 @@ def contour(m, level):
     contours = measure.find_contours(m.data, level=level)
     contours = [m.wcs.array_index_to_world(c[:, 0], c[:, 1]) for c in contours]
     return contours
+
+
+def remove_obs_keywords(meta):
+    """
+    Parameters
+    ----------
+    meta : dict
+    """
+    for key in ['crln_obs', 'crlt_obs', 'dsun_obs',
+                'hgln_obs', 'hglt_obs', 'dsun_obs']:
+        meta.pop(key, None)
+    return meta
+
+
+def set_observer_coord(m, observer_coord):
+    """
+    Set observer coordinate.
+
+    Parameters
+    ----------
+    m : `~sunpy.map.GenericMap`
+        Input map.
+    observer_coord : astropy.coordiantes.SkyCoord
+        Observer coordinate.
+    """
+    from sunpy.coordinates import frames
+    new_obs_frame = frames.HeliographicStonyhurst(obstime=m.date)
+    observer_coord = observer_coord.transform_to(new_obs_frame)
+
+    new_meta = remove_obs_keywords(m.meta)
+    new_meta['hglt_obs'] = observer_coord.lat.to_value(u.deg)
+    new_meta['hgln_obs'] = observer_coord.lon.to_value(u.deg)
+    new_meta['dsun_obs'] = observer_coord.radius.to_value(u.m)
+    return sunpy.map.Map(m.data, new_meta)
+
+
+def set_earth_obs_coord(m):
+    """
+    Set the observer coordinate of *m* to Earth.
+
+    Parameters
+    ----------
+    m : `~sunpy.map.GenericMap`
+        Input map.
+    """
+    return set_observer_coord(m, sunpy.coordinates.get_earth(m.date))
